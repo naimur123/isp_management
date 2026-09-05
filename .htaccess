@@ -1,0 +1,25 @@
+# ISP Management System - root .htaccess
+# Safe defaults for a standard cPanel/Apache shared-hosting deployment.
+
+Options -Indexes
+ServerSignature Off
+
+<IfModule mod_php.c>
+    php_flag display_errors off
+</IfModule>
+
+# Friendly error pages
+ErrorDocument 403 /errors/403.php
+ErrorDocument 404 /errors/404.php
+
+<IfModule mod_headers.c>
+    Header set X-Content-Type-Options "nosniff"
+    Header set X-Frame-Options "SAMEORIGIN"
+    Header set X-XSS-Protection "1; mode=block"
+    Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Block access to sensitive file types anywhere in the app
+<FilesMatch "\.(sql|log|md|env|ini|bak)$">
+    Require all denied
+</FilesMatch>

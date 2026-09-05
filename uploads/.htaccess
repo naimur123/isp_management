@@ -1,0 +1,10 @@
+# Uploaded files must never be executable as scripts.
+Options -Indexes -ExecCGI
+AddHandler cgi-script .php .php3 .php4 .php5 .php7 .php8 .phtml .pl .py .cgi .asp .sh
+RemoveHandler .php .php3 .php4 .php5 .php7 .php8 .phtml
+<IfModule mod_php.c>
+    php_flag engine off
+</IfModule>
+<FilesMatch "\.(php|php3|php4|php5|php7|php8|phtml|pl|py|cgi|asp|sh)$">
+    Require all denied
+</FilesMatch>

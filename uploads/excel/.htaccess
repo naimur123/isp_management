@@ -1,0 +1,2 @@
+# Uploaded spreadsheets are processed server-side only - never served directly.
+Require all denied
