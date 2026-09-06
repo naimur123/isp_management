@@ -8,7 +8,8 @@ $record = run_row($sql, [$id]);
 
 $current_status = $_POST['current_status'] ?? 'Due';
 $new_status = ($current_status === 'Paid' && $record['collection_status'] === 'Paid') ? 'Paid' : 'Due';
-$collection_amount = !empty($_POST['collection_amount']) ? $_POST['collection_amount'] : 0.00;
+$collection_amount = (!empty($_POST['collection_amount']) && empty($record['collection_amount'])) ? $_POST['collection_amount'] : $record['collection_amount'];
+$bank_id = (!empty($_POST['bank_id']) && empty($record['bank_id'])) ? $_POST['bank_id'] : $record['bank_id'];
 
 if ($new_status === 'Paid'  && (empty($record['collection_amount'])  || empty($record['bank_id']))){
     //current record details
@@ -32,7 +33,7 @@ if ($new_status === 'Paid'  && (empty($record['collection_amount'])  || empty($r
     }
 
     $updateSql = "UPDATE monthly_records SET collection_status = ?, collected_date = ?, actual_collected_date = ?, collected_by = ?, collection_amount = ?, bank_id = ? WHERE id = ?";
-    run_scalar($updateSql, [$new_status, $paid_date, $today, current_user_id(), $collection_amount, $_POST['bank_id'] ?? null, $id]);
+    run_scalar($updateSql, [$new_status, $paid_date, $today, current_user_id(), $collection_amount, $bank_id, $id]);
     log_activity('Collection Status Updated', 'Billing', $id, 'Marked as '. $new_status .'on ' . $paid_date);
     flash_set('success', 'Collection Status Updated.');
 } else {
