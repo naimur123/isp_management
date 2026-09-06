@@ -103,6 +103,9 @@ $softwareName = setting('software_name', 'ISP Management System');
       <a class="nav-link <?= $activeNav === 'admin_zones' ? 'active' : '' ?>" href="<?= e(base_url('admin/zones.php')) ?>">
         <i class="fa-solid fa-map-pin"></i> Zones
       </a>
+      <a class="nav-link <?= $activeNav === 'banks' ? 'active' : '' ?>" href="<?= e(base_url('admin/banks.php')) ?>">
+        <i class="fa-solid fa-building"></i> Banks
+      </a>
       <a class="nav-link <?= $activeNav === 'admin_activity' ? 'active' : '' ?>" href="<?= e(base_url('admin/activity_log.php')) ?>">
         <i class="fa-solid fa-list-check"></i> Activity Log
       </a>
