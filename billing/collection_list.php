@@ -150,9 +150,15 @@ require_once __DIR__ . '/../includes/header.php';
             <td><?= format_currency($r['billing_amount']) ?></td>
             <td>
               <!-- Toggle Button -->
+               <?php 
+                 $onclickAction = 'onclick="toggleInlineForm(this)"';
+                 if($r['collection_status'] === 'Paid' && !empty($r['collection_amount']) && !empty($r['bank_id'])){
+                    $onclickAction = "";
+                 } 
+               ?>
               <button type="button" 
                       class="btn btn-sm p-0 border-0 bg-transparent" 
-                      onclick="toggleInlineForm(this)" 
+                      <?php echo $onclickAction; ?>
                       title="Click to enter payment details">
                 <?= status_badge($r['collection_status']) ?>
               </button>
@@ -164,13 +170,16 @@ require_once __DIR__ . '/../includes/header.php';
                   <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
                   <input type="hidden" name="current_status" value="<?= e($r['collection_status']) ?>">
             
-                  <!-- Paid Amount Input -->
+                  <!-- Collection Amount -->
+                  <?php if(empty($r['collection_amount'])): ?>
                   <div class="mb-2">
-                    <label class="form-label form-label-sm fw-bold mb-1">Paid Amount</label>
-                    <input type="number" step="0.01" name="paid_amount" class="form-control form-control-sm" placeholder="0.00" required>
+                    <label class="form-label form-label-sm fw-bold mb-1">Collection Amount</label>
+                    <input type="number" name="collection_amount" class="form-control form-control-sm">
                   </div>
+                  <?php endif; ?>
             
                   <!-- Bank Name Select -->
+                  <?php if(empty($r['bank_id'])): ?>
                   <div class="mb-2">
                     <label class="form-label form-label-sm fw-bold mb-1">Bank Name</label>
                     <select name="bank_id" class="form-select form-select-sm" required>
@@ -181,6 +190,7 @@ require_once __DIR__ . '/../includes/header.php';
                       <?php endforeach; ?>
                     </select>
                   </div>
+                  <?php endif; ?>
             
                   <!-- Actions -->
                   <div class="d-flex gap-1">

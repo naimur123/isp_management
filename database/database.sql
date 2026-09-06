@@ -233,9 +233,11 @@ CREATE TABLE IF NOT EXISTS `settings` (
 ALTER TABLE `monthly_records` 
    ADD `collection_status` ENUM('Paid','Due') NOT NULL DEFAULT 'Due',
    ADD `collection_segment` VARCHAR(30) NULL DEFAULT NULL, 
-   ADD `collected_by` INT NULL DEFAULT NULL, 
+   ADD `collected_by` INT(10) NULL DEFAULT NULL, 
    ADD `collected_date` DATE NULL DEFAULT NULL,
-   ADD `actual_collected_date` DATE NULL DEFAULT NULL;
+   ADD `actual_collected_date` DATE NULL DEFAULT NULL,
+   ADD `collection_amount` DECIMAL(14,2) NULL DEFAULT 0.00,
+   ADD `bank_id` INT(10) NULL AFTER `collection_amount`;
 
   /* Bank Information Table */
   CREATE TABLE IF NOT EXISTS `banks` (

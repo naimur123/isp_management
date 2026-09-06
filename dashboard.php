@@ -183,6 +183,74 @@ $sqlTop10 = "SELECT c.id AS customer_id_pk, c.customer_id AS cust_code, c.custom
 $top10_collection_due_records = run_all($sqlTop10, $mrParams);
 /* End */
 
+/* Week Segment Wise Collection Due */
+$WeeklyCollectionWhereSql = $mrWhereSql;
+$sqlWeeklyCollection = "SELECT *
+    FROM (
+        SELECT
+            m.collection_segment,
+            c.id AS customer_id_pk,
+            c.customer_id AS cust_code,
+            c.customer_name,
+            co.company_name,
+            cat.category_name,
+            z.zone_name,
+            m.billing_month,
+            SUM(m.billing_amount) AS target_collection,
+            SUM(m.collection_amount) AS already_collected,
+            SUM(
+                m.billing_amount - m.collection_amount
+            ) AS total_due,
+            ROW_NUMBER() OVER (
+                PARTITION BY m.collection_segment
+                ORDER BY SUM(
+                    m.billing_amount - m.collection_amount
+                ) DESC
+            ) AS row_num
+
+        $baseJoin
+        WHERE $WeeklyCollectionWhereSql
+        GROUP BY
+            m.collection_segment,
+            c.id,
+            c.customer_id,
+            c.customer_name,
+            co.company_name,
+            cat.category_name,
+            m.billing_month,
+            z.zone_name
+    ) AS ranked
+
+    WHERE row_num <= 5
+
+    ORDER BY
+        CAST(SUBSTRING_INDEX(collection_segment, '-', 1) AS UNSIGNED) ASC,
+        total_due DESC";
+$weeklyCollectionRecords = run_all($sqlWeeklyCollection, $mrParams);
+$week_segments = [];
+
+foreach ($weeklyCollectionRecords as $row) {
+    $week_segments[$row['collection_segment']][] = $row;
+}
+/* End */
+
+/* Bank wise Collection */
+$bankWiseCollectionWhereSql = $mrWhereSql;
+$bankWiseCollectionJoin = $baseJoin . " JOIN banks b ON b.id = m.bank_id";
+$sqlBankWiseCollection = "SELECT
+                            b.bank_name,
+                            SUM(m.billing_amount) AS target_collection,
+                            SUM(m.collection_amount) AS total_collection
+                          $bankWiseCollectionJoin
+                          WHERE
+                            $bankWiseCollectionWhereSql
+                          GROUP BY
+                            b.bank_name
+                          limit 5";
+
+$bankWiseCollectionRecords = run_all($sqlBankWiseCollection, $mrParams);
+/* End */
+
 /* Total Paid Collection */
 $paidWhereSql = $mrWhereSql. " AND  m.collection_status = 'Paid'";
 $sqlTotalPaid = "SELECT SUM(m.billing_amount) AS paid_amount
@@ -336,114 +404,110 @@ require_once __DIR__ . '/includes/header.php';
     </a>
   </div>
 
-<!-- Month to Month Collection Report -->
+<!-- Weekly Targeted Collection Reports -->
 <div class="row g-3 mb-1">
   <div class="col-12">
-    <div class="fw-bold small text-uppercase text-muted">Month to Month Due Collection Highlights</div>
+    <div class="fw-bold small text-uppercase text-muted">Weekly Targeted Collection Reports</div>
   </div>
-  <!-- Total Collection -->
-<?php
-// PHP logic to place before rendering HTML
-$due_limit = 10;
-$due_page = isset($_GET['due_page']) ? max(1, (int)$_GET['due_page']) : 1;
-$total_due_records = count($collection_due_records); // or get COUNT(*) from DB
-$total_due_pages = ceil($total_due_records / $due_limit);
-$due_offset = ($due_page - 1) * $due_limit;
+  <?php $params = array_merge($_GET); ?>
+  <!-- Total Due -->
+  <?php foreach ($week_segments as $segment => $customers): ?>
+    <div class="col-lg-6 mb-2">
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>
+                    Week <?= e($segment) ?>
+                </strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center">Customer</th>
+                                <th>Target Collection</th>
+                                <th>Already Collected</th>
+                                <th>Due Collection</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($customers as $customer): ?>
+                                <tr>
+                                    <td class="text-center">
+                                        <?= e($customer['customer_name']) ?>
+                                        </span><br><span class="text-muted small"><?= e($customer['company_name']) ?>
+                                        </span><br><span class="text-muted small"><?= e(format_month($customer['billing_month'])) ?>
+                                    </td>
 
-// Slice array (or use SQL LIMIT $due_limit OFFSET $due_offset)
-$paged_due_records = array_slice($collection_due_records, $due_offset, $due_limit);
-?>
+                                    <td class="text-center">
+                                        <?= number_format($customer['target_collection']) ?>
+                                    </td>
 
-<!-- Card HTML -->
-<?php $params = array_merge($_GET, ['status' => 'due']); ?>
-<div class="col-lg-4">
-  <div class="card h-100 d-flex flex-column">
-    <div class="card-header d-flex justify-content-between align-items-center">
-      <span>Collection Due Report</span>
-      <a href="<?= e(base_url('billing/collection_list.php?' . http_build_query($params))) ?>" 
-        class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
-        View Full Report <i class="fa-solid fa-arrow-right ms-1"></i>
-      </a>
+                                    <td class="text-center">
+                                        <?= number_format($customer['already_collected']) ?>
+                                    </td>
+
+                                    <td class="text-center">
+                                        <strong>
+                                            <?= number_format($customer['total_due']) ?>
+                                        </strong>
+                                    </td>
+                                </tr>
+
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
     </div>
-
-    <div class="table-responsive flex-grow-1">
-      <table class="table table-m mb-0">
-        <tbody>
-          <?php if (empty($paged_due_records)): ?>
-            <tr>
-              <td class="text-muted small p-3">No data.</td>
-            </tr>
-          <?php else: ?>
-            <?php foreach ($paged_due_records as $i => $r): ?>
-              <tr>
-                <td><?= $due_offset + $i + 1 ?></td>
-                <td>
-                  <?= e(format_month($r['billing_month'])) ?><br>
-                  <span class="text-muted small"><?= e($r['customer_name']) ?></span><br>
-                  <span class="text-muted small"><?= e($r['company_name']) ?></span>
-                </td>
-                <td class="text-end fw-semibold">
-                  <?= format_currency($r['billing_amount']) ?><br>
-                  <span class="text-muted small"><?= status_badge($r['collection_status']) ?></span>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          <?php endif; ?>
-        </tbody>
-      </table>
-    </div>
-
-    <?php if ($total_due_pages > 1): ?>
-      <div class="card-footer bg-transparent d-flex justify-content-between align-items-center py-2">
-        <span class="text-muted small">
-          Page <?= $due_page ?> of <?= $total_due_pages ?>
-        </span>
-        <ul class="pagination pagination-sm mb-0">
-          <li class="page-item <?= ($due_page <= 1) ? 'disabled' : '' ?>">
-            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['due_page' => $due_page - 1])) ?>">&laquo;</a>
-          </li>
-          <li class="page-item <?= ($due_page >= $total_due_pages) ? 'disabled' : '' ?>">
-            <a class="page-link" href="?<?= http_build_query(array_merge($_GET, ['due_page' => $due_page + 1])) ?>">&raquo;</a>
-          </li>
-        </ul>
-      </div>
-    <?php endif; ?>
-  </div>
+  <?php endforeach; ?>
 </div>
+<!-- End -->
 
-  <!-- Top 10 Collection -->
-  <div class="col-lg-4">
+<!-- Bank Wise Collection Reports -->
+ <div class="row g-3 mb-1">
+  <div class="col-12">
+    <div class="fw-bold small text-uppercase text-muted">Bank Wise Collection Reports</div>
+  </div>
+  <!-- Bank Collection Total -->
+    <div class="col-lg-6 mb-2">
     <div class="card h-100">
-      <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Top 10 Due</span>
-        <a href="<?= e(base_url('billing/collection_list.php?' . http_build_query($params))) ?>" 
-          class="btn btn-sm btn-outline-primary py-0 px-2" style="font-size: 0.75rem;">
-          View Full Report <i class="fa-solid fa-arrow-right ms-1"></i>
-        </a>
+      <div class="card-header d-flex justify-content-center align-items-center">
+        <span>Top 5 Bank Collection</span>
       </div>
       <div class="table-responsive">
-        <table class="table table-m">
-          <tbody>
-            <?php if (!$top10_collection_due_records): ?><tr>
-                <td class="text-muted small p-3">No data.</td>
-              </tr><?php endif; ?>
-            <?php foreach ($top10_collection_due_records as $i => $r): ?>
-              <tr>
-                <td><?= $i + 1 ?></td>
-                <td><?= e($r['customer_name']) ?><br><span class="text-muted small"><?= e($r['company_name']) ?></span>
-                </td>
-                <td class="text-end fw-semibold"><?= format_currency($r['total_due']) ?>
-                </td>
-              </tr>
-            <?php endforeach; ?>
-          </tbody>
+       <table class="table table-bordered table-sm mb-0">
+            <thead>
+                <tr>
+                    <th>Bank Name</th>
+                    <th>Target</th>
+                    <th>Collected</th>
+                </tr>
+            </thead>
+            <tbody>
+                <?php foreach ($bankWiseCollectionRecords as $bank_collection): ?>
+                    <tr>
+                        <td>
+                            <?= e($bank_collection['bank_name']) ?>
+                        </td>
+                        <td>
+                            <?= number_format($bank_collection['target_collection']) ?>
+                        </td>
+                        <td>
+                            <?= number_format($bank_collection['total_collection']) ?>
+                        </td>
+                    </tr>
+
+                <?php endforeach; ?>
+            </tbody>
         </table>
       </div>
     </div>
   </div>
+  <!-- End -->
 </div>
-
-<br>
 
 <div class="row g-3 mb-1">
   <div class="col-12">

@@ -3,9 +3,14 @@ require_once __DIR__ . '/../config/config.php';
 require_admin();
 
 $id = (int)($_POST['id'] ?? 0);
+$sql = 'SELECT id, billing_month, collection_status, collection_segment, collection_amount, bank_id FROM monthly_records WHERE id = ?';
+$record = run_row($sql, [$id]); 
+
 $current_status = $_POST['current_status'] ?? 'Due';
-$new_status = ($current_status === 'Paid') ? 'Due' : 'Paid';
-if ($new_status !== $current_status) {
+$new_status = ($current_status === 'Paid' && $record['collection_status'] === 'Paid') ? 'Paid' : 'Due';
+$collection_amount = !empty($_POST['collection_amount']) ? $_POST['collection_amount'] : 0.00;
+
+if ($new_status === 'Paid'  && (empty($record['collection_amount'])  || empty($record['bank_id']))){
     //current record details
     $sql = 'SELECT id, billing_month, collection_segment FROM monthly_records WHERE id = ?';
     $record = run_row($sql, [$id]); 
@@ -26,8 +31,8 @@ if ($new_status !== $current_status) {
         $paid_date = $today;
     }
 
-    $updateSql = "UPDATE monthly_records SET collection_status = ?, collected_date = ?, actual_collected_date = ?, collected_by = ? WHERE id = ?";
-    run_scalar($updateSql, [$new_status, $paid_date, $today, current_user_id(), $id]);
+    $updateSql = "UPDATE monthly_records SET collection_status = ?, collected_date = ?, actual_collected_date = ?, collected_by = ?, collection_amount = ?, bank_id = ? WHERE id = ?";
+    run_scalar($updateSql, [$new_status, $paid_date, $today, current_user_id(), $collection_amount, $_POST['bank_id'] ?? null, $id]);
     log_activity('Collection Status Updated', 'Billing', $id, 'Marked as '. $new_status .'on ' . $paid_date);
     flash_set('success', 'Collection Status Updated.');
 } else {
