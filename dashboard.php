@@ -453,8 +453,13 @@ require_once __DIR__ . '/includes/header.php';
                                         </strong>
                                     </td>
                                 </tr>
-
+                                
                             <?php endforeach; ?>
+                            <?php if (empty($customers)): ?>
+                                <tr>
+                                  <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
+                                </tr> 
+                            <?php endif; ?>
                         </tbody>
                     </table>
                 </div>
@@ -487,6 +492,11 @@ require_once __DIR__ . '/includes/header.php';
                 </tr>
             </thead>
             <tbody>
+                <?php if (empty($bankWiseCollectionRecords)): ?>
+                    <tr>
+                      <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
+                    </tr> 
+                <?php endif; ?>
                 <?php foreach ($bankWiseCollectionRecords as $bank_collection): ?>
                     <tr>
                         <td>
