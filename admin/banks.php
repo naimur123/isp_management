@@ -84,6 +84,11 @@ require_once __DIR__ . '/../includes/header.php';
           </td>
         </tr>
         <?php endforeach; ?>
+        <?php if (empty($rows)): ?>
+            <tr>
+              <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
+            </tr> 
+        <?php endif; ?>
       </tbody>
     </table>
   </div>
