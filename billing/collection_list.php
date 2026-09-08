@@ -152,7 +152,7 @@ require_once __DIR__ . '/../includes/header.php';
               <!-- Toggle Button -->
                <?php 
                  $onclickAction = 'onclick="toggleInlineForm(this)"';
-                 if($r['collection_status'] === 'Paid' && (!empty($r['collection_amount']) || (float)($r['collection_amount'] != 0)) && !empty($r['bank_id'])){
+                 if($r['collection_status'] === 'Paid' && !empty($r['collection_amount']) && (float)($r['collection_amount'] != 0) && !empty($r['bank_id'])){
                     $onclickAction = "";
                  } 
                ?>
@@ -168,13 +168,13 @@ require_once __DIR__ . '/../includes/header.php';
                 <form action="<?= e(base_url('billing/toggle_status.php')) ?>" method="post">
                   <?= csrf_field() ?>
                   <input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-                  <input type="hidden" name="current_status" value="<?= e($r['collection_status']) ?>">
+                  <input type="hidden" name="current_status" value="Paid">
             
                   <!-- Collection Amount -->
                   <?php if(empty($r['collection_amount']) || (float)$r['collection_amount'] == 0): ?>
                   <div class="mb-2">
                     <label class="form-label form-label-sm fw-bold mb-1">Collection Amount</label>
-                    <input type="number" name="collection_amount" class="form-control form-control-sm">
+                    <input type="number" step="any" name="collection_amount" value="<?= (!empty($r['billing_amount'])) ? $r['billing_amount'] : 0 ?>" class="form-control form-control-sm">
                   </div>
                   <?php endif; ?>
             

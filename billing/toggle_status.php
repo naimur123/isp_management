@@ -5,13 +5,12 @@ require_admin();
 $id = (int)($_POST['id'] ?? 0);
 $sql = 'SELECT id, billing_month, collection_status, collection_segment, collection_amount, bank_id FROM monthly_records WHERE id = ?';
 $record = run_row($sql, [$id]); 
-
-$current_status = $_POST['current_status'] ?? 'Due';
-$new_status = ($current_status === 'Paid' && $record['collection_status'] === 'Paid') ? 'Paid' : 'Due';
-$collection_amount = (!empty($_POST['collection_amount']) && empty($record['collection_amount'])) ? $_POST['collection_amount'] : $record['collection_amount'];
+$current_status = $_POST['current_status'];
+$new_status = $current_status;
+$collection_amount = (!empty($_POST['collection_amount']) && ( empty($record['collection_amount']) || (float)($record['collection_amount'] == 0))) ? $_POST['collection_amount'] : $record['collection_amount'];
 $bank_id = (!empty($_POST['bank_id']) && empty($record['bank_id'])) ? $_POST['bank_id'] : $record['bank_id'];
 
-if ($new_status === 'Paid'  && (empty($record['collection_amount'])  || empty($record['bank_id']))){
+if ($new_status === 'Paid' && ( empty($record['collection_amount']) || (float)($record['collection_amount'] == 0 || empty($record['bank_id'])))) {
     //current record details
     $sql = 'SELECT id, billing_month, collection_segment FROM monthly_records WHERE id = ?';
     $record = run_row($sql, [$id]); 
