@@ -270,21 +270,66 @@ function render_pagination(int $total, int $page, int $perPage): string
 function generate_customer_id(int $companyId): string
 {
     $pdo = db();
-    $stmt = $pdo->prepare('SELECT customer_prefix, last_customer_sequence FROM companies WHERE id = ? FOR UPDATE');
+
+    $stmt = $pdo->prepare(
+        'SELECT customer_prefix, last_customer_sequence
+         FROM companies
+         WHERE id = ?
+         FOR UPDATE'
+    );
+
     $stmt->execute([$companyId]);
+
     $company = $stmt->fetch();
 
     if (!$company) {
         throw new RuntimeException('Invalid company selected.');
     }
 
-    $next = (int) $company['last_customer_sequence'] + 1;
+    $prefix = $company['customer_prefix'];
+    $lastSequence = (int) $company['last_customer_sequence'];
     $digits = (int) setting('customer_id_digits', 5);
 
-    $update = $pdo->prepare('UPDATE companies SET last_customer_sequence = ? WHERE id = ?');
+    /*
+     * Finding the highest customer sequence already used.
+     *
+     * Example:
+     * TCL-00001
+     * TCL-00002
+     * TCL-00015
+     */
+    $stmt = $pdo->prepare(
+        "SELECT MAX(
+            CAST(
+                SUBSTRING(customer_id, LENGTH(?) + 2)
+                AS UNSIGNED
+            )
+        )
+        FROM customers
+        WHERE customer_id LIKE CONCAT(?, '-%')"
+    );
+
+    $stmt->execute([$prefix, $prefix]);
+
+    $maxExisting = (int) ($stmt->fetchColumn() ?? 0);
+
+    $next = max($lastSequence, $maxExisting) + 1;
+
+    // Save the new sequence number.
+    $update = $pdo->prepare(
+        'UPDATE companies
+         SET last_customer_sequence = ?
+         WHERE id = ?'
+    );
+
     $update->execute([$next, $companyId]);
 
-    return $company['customer_prefix'] . '-' . str_pad((string) $next, $digits, '0', STR_PAD_LEFT);
+    return $prefix . '-' . str_pad(
+        (string) $next,
+        $digits,
+        '0',
+        STR_PAD_LEFT
+    );
 }
 
 /* ---------------------------------------------------------------------
