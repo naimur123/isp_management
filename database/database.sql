@@ -251,6 +251,10 @@ ALTER TABLE `monthly_records`
     `updated_at` DATETIME NULL DEFAULT CURRENT_TIMESTAMP , 
     PRIMARY KEY (`id`)) ENGINE = InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
+    ALTER TABLE `monthly_records` CHANGE `status` 
+    `status` ENUM('Active','Inactive','Hold') 
+    CHARACTER SET utf8mb4 COLLATE utf8mb4_general_ci NOT NULL DEFAULT 'Active';
+
 -- =====================================================================
 -- SEED DATA
 -- =====================================================================

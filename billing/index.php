@@ -89,7 +89,15 @@ require_once __DIR__ . '/../includes/header.php';
       <div class="col-md-2"><label class="form-label">Billing Month</label><input type="month" name="month" class="form-control" value="<?= e($month) ?>"></div>
       <div class="col-md-1"><label class="form-label">Year</label><select name="year" class="form-select"><option value="">All</option><?php foreach ($years as $y): ?><option value="<?= $y ?>" <?= (string) $year === (string) $y ? 'selected' : '' ?>><?= $y ?></option><?php endforeach; ?></select></div>
 
-      <div class="col-md-2"><label class="form-label">Status</label><select name="status" class="form-select"><option value="">All</option><option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option><option value="Inactive" <?= $status === 'Inactive' ? 'selected' : '' ?>>Inactive</option></select></div>
+      <div class="col-md-2">
+        <label class="form-label">Status</label>
+        <select name="status" class="form-select">
+          <option value="">All</option>
+          <option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option>
+          <option value="Inactive" <?= $status === 'Inactive' ? 'selected' : '' ?>>Inactive</option>
+          <option value="Hold" <?= $status === 'Hold' ? 'selected' : '' ?>>Hold</option>
+        </select>
+      </div>
       <div class="col-md-2"><label class="form-label">Entry Date From</label><input type="date" name="date_from" class="form-control" value="<?= e($dateFrom) ?>"></div>
       <div class="col-md-2"><label class="form-label">Entry Date To</label><input type="date" name="date_to" class="form-control" value="<?= e($dateTo) ?>"></div>
       <div class="col-md-1"><label class="form-label">Min BDT</label><input type="number" name="min_billing" class="form-control" value="<?= e($minBilling) ?>"></div>

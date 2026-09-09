@@ -29,7 +29,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $form['collection_segment'] = post('week_segment');
     $form['billing_amount'] = post('billing_amount');
     $form['bandwidth_mbps'] = post('bandwidth_mbps');
-    $form['status'] = post('status', 'Active');
+    $form['status'] = post('status');
     $form['remarks'] = post('remarks');
 
     $monthNorm = normalize_billing_month($form['billing_month']);
@@ -37,7 +37,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     if (!$monthNorm) $errors[] = 'Please provide a valid billing month.';
     if ($form['billing_amount'] === '' || !is_numeric($form['billing_amount']) || (float) $form['billing_amount'] < 0) $errors[] = 'Monthly Billing Amount must be a number greater than or equal to 0.';
     if ($form['bandwidth_mbps'] === '' || !is_numeric($form['bandwidth_mbps']) || (float) $form['bandwidth_mbps'] < 0) $errors[] = 'BW Sold must be a number greater than or equal to 0.';
-    if (!in_array($form['status'], ['Active', 'Inactive'], true)) $errors[] = 'Invalid status.';
+    if (!in_array($form['status'], ['Active', 'Inactive', 'Hold'], true)) $errors[] = 'Invalid status.';
 
     if (!$errors && $monthNorm !== $record['billing_month']) {
         $dup = db()->prepare('SELECT id FROM monthly_records WHERE customer_id = ? AND billing_month = ? AND deleted_at IS NULL AND id != ?');
@@ -111,6 +111,7 @@ require_once __DIR__ . '/../includes/header.php';
             <div class="d-flex gap-3">
               <div class="form-check"><input class="form-check-input" type="radio" name="status" value="Active" id="mrActive" <?= $form['status'] === 'Active' ? 'checked' : '' ?>><label class="form-check-label" for="mrActive">Active</label></div>
               <div class="form-check"><input class="form-check-input" type="radio" name="status" value="Inactive" id="mrInactive" <?= $form['status'] === 'Inactive' ? 'checked' : '' ?>><label class="form-check-label" for="mrInactive">Inactive</label></div>
+              <div class="form-check"><input class="form-check-input" type="radio" name="status" value="Hold" id="mrHold" <?= $form['status'] === 'Hold' ? 'checked' : '' ?>><label class="form-check-label" for="mrHold">Hold</label></div>
             </div>
           </div>
           <div class="mb-4">

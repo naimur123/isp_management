@@ -481,11 +481,14 @@ function status_badge(string $status): string
     $status = ucfirst(strtolower(trim($status)));
     
     // Check for both 'Active' and 'Paid'
-    $isSuccess = in_array($status, ['Active', 'Paid'], true);
-    
-    $cls = $isSuccess 
-        ? 'bg-success-subtle text-success-emphasis border-success-subtle' 
-        : 'bg-danger-subtle text-danger-emphasis border-danger-subtle';
+    $cls = '';
+    if(in_array($status, ['Active', 'Paid'])){
+       $cls = 'bg-success-subtle text-success-emphasis border-success-subtle'; 
+    }else if(in_array($status, ['Inactive', 'Due'])){
+        $cls = 'bg-danger-subtle text-danger-emphasis border-danger-subtle';
+    }else if(in_array($status, ['Hold'])){
+        $cls = 'bg-warning text-warning-emphasis border-warning-subtle';
+    }
         
     return '<span class="badge rounded-pill ' . $cls . ' border">' . e($status) . '</span>';
 }

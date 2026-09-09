@@ -182,7 +182,8 @@ function parse_import_file(string $filePath): array
         if ($statusRaw !== '') {
             if (strcasecmp($statusRaw, 'active') === 0) $statusNorm = 'Active';
             elseif (strcasecmp($statusRaw, 'inactive') === 0) $statusNorm = 'Inactive';
-            else { $errors[] = "Status \"$statusRaw\" must be Active or Inactive."; }
+            elseif (strcasecmp($statusRaw, 'hold') === 0) $statusNorm = 'Hold';
+            else { $errors[] = "Status \"$statusRaw\" must be Active or Inactive or Hold."; }
         }
 
         // Duplicate detection (within this file).
@@ -255,7 +256,6 @@ function process_import_rows(array $parsed, string $duplicateMode): array
     $pdo = db();
     $imported = 0; $updated = 0; $skipped = 0; $failed = 0;
     $errorLog = [];
-
     foreach ($parsed['rows'] as $row) {
         if ($row['row_status'] === 'error') {
             $failed++;
@@ -276,9 +276,14 @@ function process_import_rows(array $parsed, string $duplicateMode): array
         }
 
         try {
+            
             $pdo->beginTransaction();
 
             $customerDbId = null;
+
+            // Define allowed enum values mapping
+            $statusNorm = $row['status_norm'];
+
             if ($row['resolved_customer']) {
                 $customerDbId = (int) $row['resolved_customer']['id'];
             } else {
@@ -289,7 +294,7 @@ function process_import_rows(array $parsed, string $duplicateMode): array
                 );
                 $stmt->execute([
                     $customerId, $row['customer_name'], $row['resolved_company_id'], $row['resolved_category_id'], $row['resolved_zone_id'],
-                    $row['status_norm'], $row['remarks'] ?: null, current_user_id(), current_user_id(),
+                    'Active', $row['remarks'] ?: null, current_user_id(), current_user_id(),
                 ]);
                 $customerDbId = (int) $pdo->lastInsertId();
             }
@@ -299,7 +304,7 @@ function process_import_rows(array $parsed, string $duplicateMode): array
                     $pdo->prepare(
                         'UPDATE monthly_records SET billing_amount=?, bandwidth_mbps=?, status=?, remarks=?, updated_by=?, updated_at=NOW()
                          WHERE customer_id=? AND billing_month=? AND deleted_at IS NULL'
-                    )->execute([$row['billing_norm'], $row['bw_norm'], $row['status_norm'], $row['remarks'] ?: null, current_user_id(), $customerDbId, $row['billing_month_norm']]);
+                    )->execute([$row['billing_norm'], $row['bw_norm'], $statusNorm, $row['remarks'] ?: null, current_user_id(), $customerDbId, $row['billing_month_norm']]);
                     $updated++;
                 } else {
                     $skipped++;
@@ -308,7 +313,7 @@ function process_import_rows(array $parsed, string $duplicateMode): array
                 $pdo->prepare(
                     'INSERT INTO monthly_records (customer_id, billing_month, billing_amount, bandwidth_mbps, status, remarks, created_by, updated_by, created_at, updated_at)
                      VALUES (?,?,?,?,?,?,?,?,NOW(),NOW())'
-                )->execute([$customerDbId, $row['billing_month_norm'], $row['billing_norm'], $row['bw_norm'], $row['status_norm'], $row['remarks'] ?: null, current_user_id(), current_user_id()]);
+                )->execute([$customerDbId, $row['billing_month_norm'], $row['billing_norm'], $row['bw_norm'], $statusNorm, $row['remarks'] ?: null, current_user_id(), current_user_id()]);
                 $imported++;
             }
 

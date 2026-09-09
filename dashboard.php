@@ -184,7 +184,7 @@ $top10_collection_due_records = run_all($sqlTop10, $mrParams);
 /* End */
 
 /* Week Segment Wise Collection Due */
-$WeeklyCollectionWhereSql = $mrWhereSql;
+$WeeklyCollectionWhereSql = $mrWhereSql .' AND m.collection_segment != ""';
 $sqlWeeklyCollection = "SELECT *
     FROM (
         SELECT
@@ -226,6 +226,7 @@ $sqlWeeklyCollection = "SELECT *
     ORDER BY
         CAST(SUBSTRING_INDEX(collection_segment, '-', 1) AS UNSIGNED) ASC,
         total_due DESC";
+
 $weeklyCollectionRecords = run_all($sqlWeeklyCollection, $mrParams);
 $week_segments = [];
 
@@ -235,20 +236,30 @@ foreach ($weeklyCollectionRecords as $row) {
 /* End */
 
 /* Bank wise Collection */
-$bankWiseCollectionWhereSql = $mrWhereSql;
+$bankWiseCollectionWhereSql = $mrWhereSql .' AND m.collection_segment != ""';
 $bankWiseCollectionJoin = $baseJoin . " JOIN banks b ON b.id = m.bank_id";
 $sqlBankWiseCollection = "SELECT
+                            m.collection_segment,
                             b.bank_name,
                             SUM(m.billing_amount) AS target_collection,
-                            SUM(m.collection_amount) AS total_collection
+                            SUM(m.collection_amount) AS total_collected
                           $bankWiseCollectionJoin
                           WHERE
                             $bankWiseCollectionWhereSql
                           GROUP BY
-                            b.bank_name
-                          limit 5";
+                              m.collection_segment,
+                              b.id,
+                              b.bank_name
+                          ORDER BY
+                              CAST(SUBSTRING_INDEX(m.collection_segment, '-', 1) AS UNSIGNED) ASC,
+                              target_collection DESC";
 
 $bankWiseCollectionRecords = run_all($sqlBankWiseCollection, $mrParams);
+$bank_week_segments = [];
+
+foreach ($bankWiseCollectionRecords as $row) {
+    $bank_week_segments[$row['collection_segment']][] = $row;
+}
 /* End */
 
 /* Total Paid Collection */
@@ -258,7 +269,14 @@ $sqlTotalPaid = "SELECT SUM(m.billing_amount) AS paid_amount
              Where $paidWhereSql";
 
 $total_paid_collection = run_row($sqlTotalPaid, $mrParams);
+/* End */
 
+/* Total Hold Collection */
+$holdWhereSql = $mrWhereSql. " AND  m.status = 'Hold'";
+$sqlTotalHold = "SELECT SUM(m.billing_amount) AS hold_amount
+             $baseJoin
+             Where $holdWhereSql";
+$total_hold_collection = run_row($sqlTotalHold, $mrParams);
 /* End */
 
 $activeVsInactive = ['Active' => $activeCustomers, 'Inactive' => $inactiveCustomers];
@@ -403,8 +421,28 @@ require_once __DIR__ . '/includes/header.php';
       </div>
     </a>
   </div>
+  <!-- End -->
+  <!-- Total Hold Collection -->
+  <?php 
+    $hold_params = array_merge($_GET, ['status' => 'Hold']); 
+  ?>
+  <div class="col-xl-3 col-md-6">
+    <a href="<?= e(base_url('billing/index.php?' . http_build_query($hold_params))) ?>" class="text-decoration-none text-reset">
+      <div class="card kpi-card h-100 kpi-card-hover">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div class="kpi-label">Bill Hold (Installation Done)</div>
+            <div class="kpi-value" style="font-size:1.3rem;"><?= format_currency($total_hold_collection['hold_amount']) ?></div>
+          </div>
+          <div class="kpi-icon bg-warning"><i class="fa-solid fa-hand"></i></div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <!-- End -->
 
 <!-- Weekly Targeted Collection Reports -->
+<?php if(!empty($week_segments)) : ?>
 <div class="row g-3 mb-1">
   <div class="col-12">
     <div class="fw-bold small text-uppercase text-muted">Weekly Targeted Collection Reports</div>
@@ -465,59 +503,67 @@ require_once __DIR__ . '/includes/header.php';
                 </div>
             </div>
         </div>
-
     </div>
   <?php endforeach; ?>
 </div>
+<?php endif; ?>
 <!-- End -->
 
 <!-- Bank Wise Collection Reports -->
- <div class="row g-3 mb-1">
+<?php if(!empty($bank_week_segments)) : ?>
+<div class="row g-3 mb-1">
   <div class="col-12">
     <div class="fw-bold small text-uppercase text-muted">Bank Wise Collection Reports</div>
   </div>
-  <!-- Bank Collection Total -->
+  <!-- Total Collected -->
+  <?php foreach ($bank_week_segments as $bank_segment => $bank_data): ?>
     <div class="col-lg-6 mb-2">
-    <div class="card h-100">
-      <div class="card-header d-flex justify-content-center align-items-center">
-        <span>Top 5 Bank Collection</span>
-      </div>
-      <div class="table-responsive">
-       <table class="table table-bordered table-sm mb-0">
-            <thead>
-                <tr>
-                    <th>Bank Name</th>
-                    <th>Target</th>
-                    <th>Collected</th>
-                </tr>
-            </thead>
-            <tbody>
-                <?php if (empty($bankWiseCollectionRecords)): ?>
-                    <tr>
-                      <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
-                    </tr> 
-                <?php endif; ?>
-                <?php foreach ($bankWiseCollectionRecords as $bank_collection): ?>
-                    <tr>
-                        <td>
-                            <?= e($bank_collection['bank_name']) ?>
-                        </td>
-                        <td>
-                            <?= number_format($bank_collection['target_collection']) ?>
-                        </td>
-                        <td>
-                            <?= number_format($bank_collection['total_collection']) ?>
-                        </td>
-                    </tr>
-
-                <?php endforeach; ?>
-            </tbody>
-        </table>
-      </div>
+        <div class="card h-100">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <strong>
+                    Week <?= e($bank_segment) ?>
+                </strong>
+            </div>
+            <div class="card-body p-0">
+                <div class="table-responsive">
+                    <table class="table table-bordered table-sm mb-0">
+                        <thead>
+                            <tr>
+                                <th class="text-center">Bank Name</th>
+                                <th class="text-center">Target Collection</th>
+                                <th class="text-center">Already Collected</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ($bank_data as $data): ?>
+                              <tr>
+                                  <td class="text-center">
+                                      <?= e($data['bank_name']) ?>
+                                  </td>
+                                  <td class="text-center">
+                                      <?= number_format($data['target_collection']) ?>
+                                  </td>
+                                  <td class="text-center">
+                                      <?= number_format($data['total_collected']) ?>
+                                  </td>
+                              </tr>
+                                
+                            <?php endforeach; ?>
+                            <?php if (empty($data)): ?>
+                                <tr>
+                                  <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
+                                </tr> 
+                            <?php endif; ?>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
-  </div>
-  <!-- End -->
+  <?php endforeach; ?>
 </div>
+<?php endif; ?>
+<!-- End -->
 
 <div class="row g-3 mb-1">
   <div class="col-12">
