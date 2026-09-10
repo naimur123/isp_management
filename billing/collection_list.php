@@ -37,7 +37,7 @@ if ($status !== '') {
 
 $whereSql = implode(' AND ', $where);
 
-$countStmt = db()->prepare("SELECT COUNT(*) c FROM monthly_records cr JOIN customers c ON c.id = cr.customer_id WHERE $whereSql");
+$countStmt = db()->prepare("SELECT COUNT(*) c FROM monthly_records cr LEFT JOIN customers c ON c.id = cr.customer_id WHERE $whereSql");
 $countStmt->execute($params);
 $total = (int) $countStmt->fetch()['c'];
 
@@ -47,8 +47,8 @@ $offset = ($page - 1) * $perPage;
 
 $sql = "SELECT cr.*, c.customer_id AS cust_code, c.customer_name, co.company_name, u.full_name AS created_by_name
         FROM monthly_records cr
-        JOIN customers c ON c.id = cr.customer_id
-        JOIN companies co ON co.id = c.company_id
+        LEFT JOIN customers c ON c.id = cr.customer_id
+        LEFT JOIN companies co ON co.id = c.company_id
         LEFT JOIN users u ON u.id = cr.created_by
         WHERE $whereSql
         ORDER BY cr.id DESC
@@ -125,6 +125,7 @@ require_once __DIR__ . '/../includes/header.php';
           <th>Customer Name</th>
           <th>Company</th>
           <th>Monthly Billing</th>
+          <th>Collection Paid</th>
           <th>Status</th>
           <th>Created By</th>
           <th class="text-end">Actions</th>
@@ -148,6 +149,7 @@ require_once __DIR__ . '/../includes/header.php';
             <td><?= e($r['customer_name']) ?></td>
             <td><span class="badge bg-light text-dark border"><?= e($r['company_name']) ?></span></td>
             <td><?= format_currency($r['billing_amount']) ?></td>
+            <td><?= format_currency($r['collection_amount']) ?></td>
             <td>
               <!-- Toggle Button -->
                <?php 

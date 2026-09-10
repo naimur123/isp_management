@@ -35,7 +35,7 @@ if ($maxBw !== '') { $where[] = 'm.bandwidth_mbps <= ?'; $params[] = $maxBw; }
 
 $whereSql = implode(' AND ', $where);
 
-$countStmt = db()->prepare("SELECT COUNT(*) c FROM monthly_records m JOIN customers c ON c.id = m.customer_id WHERE $whereSql");
+$countStmt = db()->prepare("SELECT COUNT(*) c FROM monthly_records m LEFT JOIN customers c ON c.id = m.customer_id WHERE $whereSql");
 $countStmt->execute($params);
 $total = (int) $countStmt->fetch()['c'];
 
@@ -45,10 +45,10 @@ $offset = ($page - 1) * $perPage;
 
 $sql = "SELECT m.*, c.customer_id AS cust_code, c.customer_name, co.company_name, cat.category_name, z.zone_name, u.full_name AS created_by_name
         FROM monthly_records m
-        JOIN customers c ON c.id = m.customer_id
-        JOIN companies co ON co.id = c.company_id
-        JOIN categories cat ON cat.id = c.category_id
-        JOIN zones z ON z.id = c.zone_id
+        LEFT JOIN customers c ON c.id = m.customer_id
+        LEFT JOIN companies co ON co.id = c.company_id
+        LEFT JOIN categories cat ON cat.id = c.category_id
+        LEFT JOIN zones z ON z.id = c.zone_id
         LEFT JOIN users u ON u.id = m.created_by
         WHERE $whereSql
         ORDER BY m.id DESC

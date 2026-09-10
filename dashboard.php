@@ -69,8 +69,8 @@ if ($year !== '') {
 }
 $trendWhereSql = implode(' AND ', $trendConds);
 
-$baseJoin = 'FROM monthly_records m JOIN customers c ON c.id = m.customer_id
-             JOIN companies co ON co.id = c.company_id JOIN categories cat ON cat.id = c.category_id JOIN zones z ON z.id = c.zone_id';
+$baseJoin = 'FROM monthly_records m LEFT JOIN customers c ON c.id = m.customer_id
+             LEFT JOIN companies co ON co.id = c.company_id LEFT JOIN categories cat ON cat.id = c.category_id LEFT JOIN zones z ON z.id = c.zone_id';
 
 /* -----------------------------------------------------------------
  * KPI cards
@@ -123,66 +123,6 @@ $monthlyBwTrend = run_all("SELECT DATE_FORMAT(m.billing_month,'%Y-%m') ym, SUM(m
 
 
 /* For Month to Month Collection Report */
-// $collectionWhere = ['c.deleted_at IS NULL', 'cr.deleted_at IS NULL'];
-// $collectionParams = [];
-
-// if (!empty($month)) {
-//     // Standardize to YYYY-MM-01 format
-//     $collectionWhere[] = 'cr.billing_month = ?';
-//     $collectionParams[] = date('Y-m-01', strtotime($month));
-// } elseif (!empty($year)) {
-//     $collectionWhere[] = 'YEAR(cr.billing_month) = ?';
-//     $collectionParams[] = (int) $year;
-// }
-
-// if (!empty($companyId)) {
-//     $collectionWhere [] = 'c.company_id = ?';
-//     $collectionParams[] = (int) $companyId;
-// }
-
-// if (!empty($categoryId)) {
-//     $collectionWhere[] = 'c.category_id = ?';
-//     $collectionParams[] = (int) $categoryId;
-// }
-
-// if (!empty($zoneId)) {
-//     $collectionWhere[] = 'c.zone_id = ?';
-//     $collectionParams[] = (int) $zoneId;
-// }
-
-// $topWhere = $collectionWhere;
-// $topParams = $collectionParams;
-
-// $topWhere[] = "cr.status = 'Paid'";
-$dueWhereSql = $mrWhereSql. " AND  m.collection_status = 'Due'";
-
-$sql = "SELECT m.*, c.customer_id AS cust_code, c.customer_name, co.company_name
-        $baseJoin
-        WHERE $dueWhereSql
-        ORDER BY m.id DESC";
-$collection_due_records = run_all($sql , $mrParams);
-// if(!empty($collection_due_records)){
-//   foreach($collection_due_records as $record){
-//       if(!empty($record['collection_segments'])){
-//         $week_segments = 
-//       }
-//   }
-// }
-
-/* Get Top 10 collection due records */
-$sqlTop10 = "SELECT c.id AS customer_id_pk, c.customer_id AS cust_code, c.customer_name, 
-                    co.company_name, cat.category_name, z.zone_name,
-                    SUM(m.billing_amount) AS total_due,
-                    COUNT(m.id) AS total_months
-             $baseJoin
-             Where $dueWhereSql
-             GROUP BY c.customer_id
-             ORDER BY total_due DESC
-             LIMIT 10";
-
-$top10_collection_due_records = run_all($sqlTop10, $mrParams);
-/* End */
-
 /* Week Segment Wise Collection Due */
 $WeeklyCollectionWhereSql = $mrWhereSql .' AND m.collection_segment != ""';
 $sqlWeeklyCollection = "SELECT *
@@ -263,8 +203,17 @@ foreach ($bankWiseCollectionRecords as $row) {
 /* End */
 
 /* Total Paid Collection */
+$billWhereSql = $mrWhereSql ." AND  m.status = 'Active'";
+$sqlTotalBill = "SELECT SUM(m.collection_amount) AS paid_amount
+             $baseJoin
+             Where $billWhereSql";
+
+$total_bill_amount = run_row($sqlTotalBill, $mrParams);
+/* End */
+
+/* Total Paid Collection */
 $paidWhereSql = $mrWhereSql. " AND  m.collection_status = 'Paid'";
-$sqlTotalPaid = "SELECT SUM(m.billing_amount) AS paid_amount
+$sqlTotalPaid = "SELECT SUM(m.collection_amount) AS paid_amount
              $baseJoin
              Where $paidWhereSql";
 
@@ -315,6 +264,7 @@ require_once __DIR__ . '/includes/header.php';
           <option value="">All</option>
           <option value="Active" <?= $status === 'Active' ? 'selected' : '' ?>>Active</option>
           <option value="Inactive" <?= $status === 'Inactive' ? 'selected' : '' ?>>Inactive</option>
+          <option value="Hold" <?= $status === 'Hold' ? 'selected' : '' ?>>Hold</option>
         </select></div>
       <div class="col-md-1 d-flex gap-1">
         <button class="btn btn-primary flex-fill" type="submit" title="Apply Filter"><i
@@ -364,17 +314,6 @@ require_once __DIR__ . '/includes/header.php';
     <div class="card kpi-card h-100">
       <div class="d-flex justify-content-between">
         <div>
-          <div class="kpi-label">Total Billing</div>
-          <div class="kpi-value" style="font-size:1.3rem;"><?= format_currency($totalBilling) ?></div>
-        </div>
-        <div class="kpi-icon bg-icon-amber"><i class="fa-solid fa-sack-dollar"></i></div>
-      </div>
-    </div>
-  </div>
-  <div class="col-xl-3 col-md-6">
-    <div class="card kpi-card h-100">
-      <div class="d-flex justify-content-between">
-        <div>
           <div class="kpi-label">Total BW Sold</div>
           <div class="kpi-value" style="font-size:1.3rem;"><?= format_bandwidth($totalBw) ?></div>
         </div>
@@ -404,6 +343,19 @@ require_once __DIR__ . '/includes/header.php';
       </div>
     </div>
   </div>
+  <!-- Total Bill -->
+  <div class="col-xl-3 col-md-6">
+    <div class="card kpi-card h-100">
+      <div class="d-flex justify-content-between">
+        <div>
+          <div class="kpi-label">Total Billing</div>
+          <div class="kpi-value" style="font-size:1.3rem;"><?= format_currency($totalBilling) ?></div>
+        </div>
+        <div class="kpi-icon bg-icon-amber"><i class="fa-solid fa-sack-dollar"></i></div>
+      </div>
+    </div>
+  </div>
+  <!-- End -->
   <!-- Total Paid Collection -->
   <?php 
     $paid_params = array_merge($_GET, ['status' => 'Paid']); 
