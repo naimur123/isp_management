@@ -154,15 +154,16 @@ require_once __DIR__ . '/../includes/header.php';
               <!-- Toggle Button -->
                <?php 
                  $onclickAction = 'onclick="toggleInlineForm(this)"';
-                 if($r['collection_status'] === 'Paid' && !empty($r['collection_amount']) && (float)($r['collection_amount'] != 0) && !empty($r['bank_id'])){
+                 if($r['collection_status'] === 'Paid' && !empty($r['collection_amount']) && (float)($r['collection_amount'] != 0) && (float)($r['collection_amount']) == $r['billing_amount'] && !empty($r['bank_id'])){
                     $onclickAction = "";
                  } 
+                 $collection_status = (!empty($r['collection_amount']) && (float)($r['collection_amount'] != 0) && (float)($r['collection_amount']) < $r['billing_amount']) ? status_badge('Partial') : status_badge($r['collection_status']);
                ?>
               <button type="button" 
                       class="btn btn-sm p-0 border-0 bg-transparent" 
                       <?php echo $onclickAction; ?>
                       title="Click to enter payment details">
-                <?= status_badge($r['collection_status']) ?>
+                <?= $collection_status ?>
               </button>
             
               <!-- Inline Form Container -->
@@ -173,10 +174,10 @@ require_once __DIR__ . '/../includes/header.php';
                   <input type="hidden" name="current_status" value="Paid">
             
                   <!-- Collection Amount -->
-                  <?php if(empty($r['collection_amount']) || (float)$r['collection_amount'] == 0): ?>
+                  <?php if(empty($r['collection_amount']) || (float)$r['collection_amount'] == 0 || (float)($r['collection_amount']) < $r['billing_amount']): ?>
                   <div class="mb-2">
                     <label class="form-label form-label-sm fw-bold mb-1">Collection Amount</label>
-                    <input type="number" step="any" name="collection_amount" value="<?= (!empty($r['billing_amount'])) ? $r['billing_amount'] : 0 ?>" class="form-control form-control-sm">
+                    <input type="number" step="any" name="collection_amount" value="<?= (!empty($r['billing_amount'])) ? $r['billing_amount'] - (float)($r['collection_amount']) : 0 ?>" class="form-control form-control-sm">
                   </div>
                   <?php endif; ?>
             

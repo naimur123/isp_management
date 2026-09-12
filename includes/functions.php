@@ -486,7 +486,7 @@ function status_badge(string $status): string
        $cls = 'bg-success-subtle text-success-emphasis border-success-subtle'; 
     }else if(in_array($status, ['Inactive', 'Due'])){
         $cls = 'bg-danger-subtle text-danger-emphasis border-danger-subtle';
-    }else if(in_array($status, ['Hold'])){
+    }else if(in_array($status, ['Hold', 'Partial'])){
         $cls = 'bg-warning text-warning-emphasis border-warning-subtle';
     }
         
