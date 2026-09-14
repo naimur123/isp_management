@@ -81,7 +81,13 @@ $totalCustomers = $activeCustomers + $inactiveCustomers;
 
 $mrAgg = run_row("SELECT COALESCE(SUM(m.billing_amount),0) billing, COALESCE(SUM(m.bandwidth_mbps),0) bw, COUNT(DISTINCT m.customer_id) custs
                    $baseJoin WHERE $mrWhereSql", $mrParams);
-$totalBilling = (float) $mrAgg['billing'];
+
+/* Total billing without Hold amount */
+$mrWhereSqlNoHold = $mrWhereSql .' AND m.status != "Hold"';
+$mrAggBill = run_row("SELECT COALESCE(SUM(m.billing_amount),0) billing
+                   $baseJoin WHERE $mrWhereSqlNoHold", $mrParams);
+                   
+$totalBilling = (float) $mrAggBill['billing'];
 $totalBw = (float) $mrAgg['bw'];
 $billedCustomers = (int) $mrAgg['custs'];
 $avgBillingPerActive = safe_divide($totalBilling, $activeCustomers ?: $billedCustomers);
