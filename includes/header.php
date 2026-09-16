@@ -60,6 +60,12 @@ $softwareName = setting('software_name', 'ISP Management System');
       </a>
       <!-- End -->
 
+      <!-- Newly added Bank Collection List -->
+      <a class="nav-link <?= $activeNav === 'bank_collection_list' ? 'active' : '' ?>" href="<?= e(base_url('billing/bank_collection_list.php')) ?>">
+        <i class="fa-solid fa-receipt"></i> Bank Collection List
+      </a>
+      <!-- End -->
+
       <?php if (is_admin()): ?>
       <a class="nav-link <?= $activeNav === 'import_upload' ? 'active' : '' ?>" href="<?= e(base_url('import/upload.php')) ?>">
         <i class="fa-solid fa-file-excel"></i> Excel Bulk Input

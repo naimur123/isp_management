@@ -173,7 +173,10 @@ $sqlWeeklyCollection = "SELECT *
         CAST(SUBSTRING_INDEX(collection_segment, '-', 1) AS UNSIGNED) ASC,
         total_due DESC";
 
-$weeklyCollectionRecords = run_all($sqlWeeklyCollection, $mrParams);
+$weeklyCollectionRecords = [];
+if(!empty($month)){
+  $weeklyCollectionRecords = run_all($sqlWeeklyCollection, $mrParams);
+}
 $week_segments = [];
 
 foreach ($weeklyCollectionRecords as $row) {
@@ -200,7 +203,11 @@ $sqlBankWiseCollection = "SELECT
                               CAST(SUBSTRING_INDEX(m.collection_segment, '-', 1) AS UNSIGNED) ASC,
                               target_collection DESC";
 
-$bankWiseCollectionRecords = run_all($sqlBankWiseCollection, $mrParams);
+$bankWiseCollectionRecords = [];
+
+if(!empty($month)){
+ $bankWiseCollectionRecords = run_all($sqlBankWiseCollection, $mrParams);
+}
 $bank_week_segments = [];
 
 foreach ($bankWiseCollectionRecords as $row) {
