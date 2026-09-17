@@ -9,7 +9,7 @@ $month = get_param('month');
 $year = get_param('year');
 $status = get_param('status');
 
-$where = ['cr.status != "Hold" AND cr.deleted_at IS NULL'];
+$where = ['cr.status != "Hold" AND cr.deleted_at IS NULL AND c.deleted_at IS NULL'];
 $params = [];
 
 if ($q !== '') {
