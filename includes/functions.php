@@ -108,6 +108,26 @@ function format_month(?string $date, string $fallback = '-'): string
     return date(setting('month_format', 'M-Y'), $ts);
 }
 
+function ordinal($number)
+{
+    $number = (int) $number;
+
+    if (($number % 100) >= 11 && ($number % 100) <= 13) {
+        return $number . 'th';
+    }
+
+    switch ($number % 10) {
+        case 1:
+            return $number . 'st';
+        case 2:
+            return $number . 'nd';
+        case 3:
+            return $number . 'rd';
+        default:
+            return $number . 'th';
+    }
+}
+
 function format_currency($amount, bool $withSymbol = true): string
 {
     $amount = (float) $amount;
@@ -536,4 +556,12 @@ function get_month_week_segments(string $billingMonth)
         ['value' => '15-22', 'label' => '15 to 22'],
         ['value' => "23-{$lastDay}", 'label' => "23 to {$lastDay}"],
     ];
+}
+
+function getDebugSql($sql, $params) {
+    foreach ($params as $param) {
+        $value = is_numeric($param) ? $param : "'" . addslashes($param) . "'";
+        $sql = preg_replace('/\?/', $value, $sql, 1);
+    }
+    return $sql;
 }

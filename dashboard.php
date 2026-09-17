@@ -130,66 +130,68 @@ $monthlyBwTrend = run_all("SELECT DATE_FORMAT(m.billing_month,'%Y-%m') ym, SUM(m
 
 /* For Month to Month Collection Report */
 /* Week Segment Wise Collection Due */
-$WeeklyCollectionWhereSql = $mrWhereSql .' AND m.collection_segment != ""';
-$sqlWeeklyCollection = "SELECT *
-    FROM (
-        SELECT
-            m.collection_segment,
-            c.id AS customer_id_pk,
-            c.customer_id AS cust_code,
-            c.customer_name,
-            co.company_name,
-            cat.category_name,
-            z.zone_name,
-            m.billing_month,
-            SUM(m.billing_amount) AS target_collection,
-            SUM(m.collection_amount) AS already_collected,
-            SUM(
-                m.billing_amount - m.collection_amount
-            ) AS total_due,
-            ROW_NUMBER() OVER (
-                PARTITION BY m.collection_segment
-                ORDER BY SUM(
-                    m.billing_amount - m.collection_amount
-                ) DESC
-            ) AS row_num
-
-        $baseJoin
-        WHERE $WeeklyCollectionWhereSql
-        GROUP BY
-            m.collection_segment,
-            c.id,
-            c.customer_id,
-            c.customer_name,
-            co.company_name,
-            cat.category_name,
-            m.billing_month,
-            z.zone_name
-    ) AS ranked
-
-    WHERE row_num <= 5
-
-    ORDER BY
-        CAST(SUBSTRING_INDEX(collection_segment, '-', 1) AS UNSIGNED) ASC,
-        total_due DESC";
+$WeeklyCollectionWhereSql = $mrWhereSql .' AND m.collection_segment != ""  AND (c.deleted_at IS NULL OR c.id IS NULL)';
+$sqlWeeklyCollection = "SELECT
+                            CONCAT(
+                                'Week ',
+                                ranked.collection_segment
+                            ) AS week,
+                            ranked.company_name,
+                            ranked.billing_month,
+                            ranked.target_collection,
+                            ranked.already_collected,
+                            ranked.total_due
+                        FROM
+                            (
+                            SELECT
+                                m.collection_segment,
+                                co.company_name,
+                                m.billing_month,
+                                SUM(m.billing_amount) AS target_collection,
+                                SUM(m.collection_amount) AS already_collected,
+                                SUM(
+                                    m.billing_amount - m.collection_amount
+                                ) AS total_due,
+                                ROW_NUMBER() OVER(
+                                PARTITION BY m.collection_segment
+                            ORDER BY
+                                SUM(
+                                    m.billing_amount - m.collection_amount
+                                )
+                            DESC
+                            ) AS row_num
+                        $baseJoin
+                        WHERE
+                            $WeeklyCollectionWhereSql
+                        GROUP BY
+                            m.collection_segment,
+                            c.id,
+                            co.company_name,
+                            m.billing_month) AS ranked
+                            WHERE
+                                ranked.row_num = 1
+                            ORDER BY
+                          CAST(
+                              SUBSTRING_INDEX(
+                                  ranked.collection_segment,
+                                  '-',
+                                  1
+                              ) AS UNSIGNED
+                          ) ASC";
 
 $weeklyCollectionRecords = [];
 if(!empty($month)){
   $weeklyCollectionRecords = run_all($sqlWeeklyCollection, $mrParams);
 }
-$week_segments = [];
-
-foreach ($weeklyCollectionRecords as $row) {
-    $week_segments[$row['collection_segment']][] = $row;
-}
 /* End */
 
 /* Bank wise Collection */
 $bankWiseCollectionWhereSql = $mrWhereSql .' AND m.collection_segment != ""';
-$bankWiseCollectionJoin = $baseJoin . " JOIN banks b ON b.id = m.bank_id";
+$bankWiseCollectionJoin = $baseJoin . " JOIN banks b ON b.id = m.bank_id LEFT JOIN users u ON u.id = m.collected_by";
 $sqlBankWiseCollection = "SELECT
                             m.collection_segment,
                             b.bank_name,
+                            u.full_name as verified_by,
                             SUM(m.billing_amount) AS target_collection,
                             SUM(m.collection_amount) AS total_collected
                           $bankWiseCollectionJoin
@@ -198,31 +200,32 @@ $sqlBankWiseCollection = "SELECT
                           GROUP BY
                               m.collection_segment,
                               b.id,
-                              b.bank_name
+                              b.bank_name,
+                              u.full_name
                           ORDER BY
                               CAST(SUBSTRING_INDEX(m.collection_segment, '-', 1) AS UNSIGNED) ASC,
                               target_collection DESC";
 
 $bankWiseCollectionRecords = [];
-
 if(!empty($month)){
- $bankWiseCollectionRecords = run_all($sqlBankWiseCollection, $mrParams);
+  $bankWiseCollectionRecords = run_all($sqlBankWiseCollection, $mrParams);
 }
 $bank_week_segments = [];
 
 foreach ($bankWiseCollectionRecords as $row) {
-    $bank_week_segments[$row['collection_segment']][] = $row;
+  $bank_week_segments[$row['collection_segment']][] = $row;
 }
+
 /* End */
 
-/* Total Paid Collection */
-$billWhereSql = $mrWhereSql ." AND  m.status = 'Active'";
-$sqlTotalBill = "SELECT SUM(m.collection_amount) AS paid_amount
-             $baseJoin
-             Where $billWhereSql";
+/* Total bill amount */
+// $billWhereSql = $mrWhereSql ." AND  m.status = 'Active'";
+// $sqlTotalBill = "SELECT SUM(m.collection_amount) AS paid_amount
+//              $baseJoin
+//              Where $billWhereSql";
 
-$total_bill_amount = run_row($sqlTotalBill, $mrParams);
-/* End */
+// $total_bill_amount = run_row($sqlTotalBill, $mrParams);
+// /* End */
 
 /* Total Paid Collection */
 $paidWhereSql = $mrWhereSql. " AND  m.collection_status = 'Paid'";
@@ -231,6 +234,10 @@ $sqlTotalPaid = "SELECT SUM(m.collection_amount) AS paid_amount
              Where $paidWhereSql";
 
 $total_paid_collection = run_row($sqlTotalPaid, $mrParams);
+/* End */
+
+/* Total Pending Bill */
+$total_pending_bill = $totalBilling - $total_paid_collection['paid_amount'];
 /* End */
 
 /* Total Hold Collection */
@@ -357,7 +364,11 @@ require_once __DIR__ . '/includes/header.php';
     </div>
   </div>
   <!-- Total Bill -->
+  <?php 
+    $total_bill_params = array_merge($_GET, ['exclude_status' => 'Hold']);
+  ?>
   <div class="col-xl-3 col-md-6">
+    <a href="<?= e(base_url('billing/index.php?' . http_build_query($total_bill_params))) ?>" class="text-decoration-none text-reset">
     <div class="card kpi-card h-100">
       <div class="d-flex justify-content-between">
         <div>
@@ -367,6 +378,7 @@ require_once __DIR__ . '/includes/header.php';
         <div class="kpi-icon bg-icon-amber"><i class="fa-solid fa-sack-dollar"></i></div>
       </div>
     </div>
+    </a>
   </div>
   <!-- End -->
   <!-- Total Paid Collection -->
@@ -382,6 +394,24 @@ require_once __DIR__ . '/includes/header.php';
             <div class="kpi-value" style="font-size:1.3rem;"><?= format_currency($total_paid_collection['paid_amount']) ?></div>
           </div>
           <div class="kpi-icon bg-icon-green"><i class="fa-solid fa-check"></i></div>
+        </div>
+      </div>
+    </a>
+  </div>
+  <!-- End -->
+  <!-- Total Pending Bill -->
+  <?php 
+    $pending_params = array_merge($_GET, ['status' => 'Due']); 
+  ?>
+  <div class="col-xl-3 col-md-6">
+    <a href="<?= e(base_url('billing/collection_list.php?' . http_build_query($pending_params))) ?>" class="text-decoration-none text-reset">
+      <div class="card kpi-card h-100 kpi-card-hover">
+        <div class="d-flex justify-content-between">
+          <div>
+            <div class="kpi-label">Total Pending Bill</div>
+            <div class="kpi-value" style="font-size:1.3rem;"><?= format_currency($total_pending_bill) ?></div>
+          </div>
+          <div class="kpi-icon bg-info"><i class="fa-solid fa-hourglass-half"></i></div>
         </div>
       </div>
     </a>
@@ -407,69 +437,95 @@ require_once __DIR__ . '/includes/header.php';
   <!-- End -->
 
 <!-- Weekly Targeted Collection Reports -->
-<?php if(!empty($week_segments)) : ?>
+<?php if(!empty($weeklyCollectionRecords)) : ?>
 <div class="row g-3 mb-1">
   <div class="col-12">
     <div class="fw-bold small text-uppercase text-muted">Weekly Targeted Collection Reports</div>
   </div>
   <?php $params = array_merge($_GET); ?>
   <!-- Total Due -->
-  <?php foreach ($week_segments as $segment => $customers): ?>
-    <div class="col-lg-6 mb-2">
-        <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
-                <strong>
-                    Week <?= e($segment) ?>
-                </strong>
-            </div>
-            <div class="card-body p-0">
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm mb-0">
-                        <thead>
+  <div class="col-lg-12 mb-2">
+      <div class="card h-100">
+        <div class="card-header text-center">
+            <strong>
+                Collection Plan ( <?= e(format_month($month)) ?> )
+            </strong>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm mb-0">
+                    <thead>
+                        <tr>
+                            <th class="text-center">Week</th>
+                            <!-- <th class="text-center">Company</th>
+                            <th class="text-center">Month</th> -->
+                            <th class="text-center">Total Target Collection</th>
+                            <th class="text-center">Already Collected</th>
+                            <th class="text-center">Due Collection</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php 
+                            $grandTarget = 0;
+                            $grandCollected = 0;
+                            $grandDue = 0;
+                        ?>
+
+                        <?php foreach ($weeklyCollectionRecords as $weeklyCollection): ?>
+                            <?php 
+                                $grandTarget += $weeklyCollection['target_collection'];
+                                $grandCollected += $weeklyCollection['already_collected'];
+                                $grandDue += $weeklyCollection['total_due'];
+                            ?>
                             <tr>
-                                <th class="text-center">Customer</th>
-                                <th>Target Collection</th>
-                                <th>Already Collected</th>
-                                <th>Due Collection</th>
+                                <td class="text-center">
+                                    <?= e($weeklyCollection['week']) ?>
+                                </td>
+                                <!-- <td class="text-center">
+                                    <?= e($weeklyCollection['company_name']) ?>
+                                </td>
+                                <td class="text-center">
+                                    <?= e(format_month($weeklyCollection['billing_month'])) ?>
+                                </td> -->
+                                <td class="text-center">
+                                    <?= number_format($weeklyCollection['target_collection']) ?>
+                                </td>
+                                <td class="text-center">
+                                    <?= number_format($weeklyCollection['already_collected']) ?>
+                                </td>
+                                <!-- Highlight cell background/text if due amount > 0 -->
+                                <td class="text-center <?= $weeklyCollection['total_due'] > 0 ? 'bg-danger-subtle' : '' ?>">
+                                    <strong>
+                                        <?= number_format($weeklyCollection['total_due']) ?>
+                                    </strong>
+                                </td>
                             </tr>
-                        </thead>
-                        <tbody>
-                            <?php foreach ($customers as $customer): ?>
-                                <tr>
-                                    <td class="text-center">
-                                        <?= e($customer['customer_name']) ?>
-                                        </span><br><span class="text-muted small"><?= e($customer['company_name']) ?>
-                                        </span><br><span class="text-muted small"><?= e(format_month($customer['billing_month'])) ?>
-                                    </td>
+                        <?php endforeach; ?>
 
-                                    <td class="text-center">
-                                        <?= number_format($customer['target_collection']) ?>
-                                    </td>
+                        <?php if (empty($weeklyCollectionRecords)): ?>
+                            <tr>
+                              <td colspan="6" class="text-center"><h5>No data found</h5></td>
+                            </tr> 
+                        <?php endif; ?>
+                    </tbody>
 
-                                    <td class="text-center">
-                                        <?= number_format($customer['already_collected']) ?>
-                                    </td>
-
-                                    <td class="text-center">
-                                        <strong>
-                                            <?= number_format($customer['total_due']) ?>
-                                        </strong>
-                                    </td>
-                                </tr>
-                                
-                            <?php endforeach; ?>
-                            <?php if (empty($customers)): ?>
-                                <tr>
-                                  <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
-                                </tr> 
-                            <?php endif; ?>
-                        </tbody>
-                    </table>
-                </div>
+                    <?php if (!empty($weeklyCollectionRecords)): ?>
+                    <tfoot class="table-light">
+                        <tr class="fw-bold">
+                            <td colspan="1" class="text-center ps-3">TOTAL</td>
+                            <td class="text-center"><?= number_format($grandTarget) ?></td>
+                            <td class="text-center"><?= number_format($grandCollected) ?></td>
+                            <td class="text-center">
+                                <?= number_format($grandDue) ?>
+                            </td>
+                        </tr>
+                    </tfoot>
+                    <?php endif; ?>
+                </table>
             </div>
         </div>
-    </div>
-  <?php endforeach; ?>
+      </div>
+  </div>
 </div>
 <?php endif; ?>
 <!-- End -->
@@ -480,13 +536,17 @@ require_once __DIR__ . '/includes/header.php';
   <div class="col-12">
     <div class="fw-bold small text-uppercase text-muted">Bank Wise Collection Reports</div>
   </div>
-  <!-- Total Collected -->
-  <?php foreach ($bank_week_segments as $bank_segment => $bank_data): ?>
-    <div class="col-lg-6 mb-2">
+
+  <?php 
+    $i = 0; 
+    $overallGrandDeposit = 0;
+    foreach ($bank_week_segments as $bank_segment => $bank_data): 
+  ?>
+    <div class="col-lg-12 mb-2">
         <div class="card h-100">
-            <div class="card-header d-flex justify-content-between align-items-center">
+            <div class="card-header text-center">
                 <strong>
-                    Week <?= e($bank_segment) ?>
+                    <?= ordinal(++$i) ?> Week (<?= e($bank_segment) ?>) ( <?= e(format_month($month)) ?> )
                 </strong>
             </div>
             <div class="card-body p-0">
@@ -494,29 +554,31 @@ require_once __DIR__ . '/includes/header.php';
                     <table class="table table-bordered table-sm mb-0">
                         <thead>
                             <tr>
-                                <th class="text-center">Bank Name</th>
-                                <th class="text-center">Target Collection</th>
-                                <th class="text-center">Already Collected</th>
+                                <th class="text-center" style="width: 40%;">Bank Name</th>
+                                <th class="text-center" style="width: 30%;">Deposit</th>
+                                <th class="text-center" style="width: 30%;">Verified By</th>
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($bank_data as $data): ?>
+                            <?php foreach ($bank_data as $data): 
+                                $overallGrandDeposit += $data['total_collected'];
+                            ?>
                               <tr>
                                   <td class="text-center">
                                       <?= e($data['bank_name']) ?>
                                   </td>
                                   <td class="text-center">
-                                      <?= number_format($data['target_collection']) ?>
-                                  </td>
-                                  <td class="text-center">
                                       <?= number_format($data['total_collected']) ?>
                                   </td>
+                                  <td class="text-center">
+                                      <?= e($data['verified_by']) ?>
+                                  </td>
                               </tr>
-                                
                             <?php endforeach; ?>
-                            <?php if (empty($data)): ?>
+
+                            <?php if (empty($bank_data)): ?>
                                 <tr>
-                                  <td colspan="12" style="text-align:center"><h5>No data found</h5></td>
+                                  <td colspan="3" class="text-center py-2"><h5>No data found</h5></td>
                                 </tr> 
                             <?php endif; ?>
                         </tbody>
@@ -526,6 +588,35 @@ require_once __DIR__ . '/includes/header.php';
         </div>
     </div>
   <?php endforeach; ?>
+
+  <!-- Final Overall Summary Card -->
+  <div class="col-lg-12 mb-2">
+      <div class="card border-0">
+          <div class="card-body p-0">
+              <div class="table-responsive">
+                  <table class="table table-bordered table-sm mb-0" style="table-layout: fixed; width: 100%;">
+                      <colgroup>
+                          <col style="width: 40%;">
+                          <col style="width: 30%;">
+                          <col style="width: 30%;">
+                      </colgroup>
+                      <tbody>
+                          <tr class="fw-bold">
+                              <td class="text-center">
+                                  GRAND TOTAL
+                              </td>
+                              <td class="text-center">
+                                  <?= number_format($overallGrandDeposit) ?>
+                              </td>
+                              <td></td>
+                          </tr>
+                      </tbody>
+                  </table>
+              </div>
+          </div>
+      </div>
+  </div>
+
 </div>
 <?php endif; ?>
 <!-- End -->

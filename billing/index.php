@@ -9,6 +9,8 @@ $zoneId = get_param('zone');
 $month = get_param('month');
 $year = get_param('year');
 $status = get_param('status');
+$exclude_status = get_param('exclude_status');
+
 $dateFrom = get_param('date_from');
 $dateTo = get_param('date_to');
 $minBilling = get_param('min_billing');
@@ -25,7 +27,14 @@ if ($categoryId !== '') { $where[] = 'c.category_id = ?'; $params[] = $categoryI
 if ($zoneId !== '') { $where[] = 'c.zone_id = ?'; $params[] = $zoneId; }
 if ($month !== '') { $where[] = 'm.billing_month = ?'; $params[] = $month . '-01'; }
 if ($year !== '') { $where[] = 'YEAR(m.billing_month) = ?'; $params[] = $year; }
-if ($status !== '') { $where[] = 'm.status = ?'; $params[] = $status; }
+
+if ($exclude_status !== '') {
+    $where[] = 'm.status != ?';
+    $params[] = $exclude_status;
+} elseif ($status !== '') {
+    $where[] = 'm.status = ?';
+    $params[] = $status;
+}
 if ($dateFrom !== '') { $where[] = 'DATE(m.created_at) >= ?'; $params[] = $dateFrom; }
 if ($dateTo !== '') { $where[] = 'DATE(m.created_at) <= ?'; $params[] = $dateTo; }
 if ($minBilling !== '') { $where[] = 'm.billing_amount >= ?'; $params[] = $minBilling; }
