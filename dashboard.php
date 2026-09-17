@@ -83,8 +83,8 @@ $mrAgg = run_row("SELECT COALESCE(SUM(m.billing_amount),0) billing, COALESCE(SUM
                    $baseJoin WHERE $mrWhereSql", $mrParams);
 
 /* Total billing without Hold amount */
-$mrWhereSqlNoHold = $mrWhereSql .' AND m.status != "Hold"';
-$mrAggBill = run_row("SELECT COALESCE(SUM(m.billing_amount),0) billing
+$mrWhereSqlNoHold = $mrWhereSql ." AND m.status != 'Hold'";
+$mrAggBill = run_row("SELECT SUM(m.billing_amount) as billing
                    $baseJoin WHERE $mrWhereSqlNoHold", $mrParams);
                    
 $totalBilling = (float) $mrAggBill['billing'];
