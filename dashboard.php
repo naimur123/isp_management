@@ -79,7 +79,7 @@ $activeCustomers = (int) run_scalar("SELECT COUNT(*) FROM customers c WHERE $cus
 $inactiveCustomers = (int) run_scalar("SELECT COUNT(*) FROM customers c WHERE $custWhereSql AND c.status = 'Inactive'", $custParamsForCounts);
 $totalCustomers = $activeCustomers + $inactiveCustomers;
 
-$mrAgg = run_row("SELECT COALESCE(SUM(m.billing_amount),0) billing, COALESCE(SUM(m.bandwidth_mbps),0) bw, COUNT(DISTINCT m.customer_id) custs
+$mrAgg = run_row("SELECT COALESCE(SUM(m.bandwidth_mbps),0) bw, COUNT(DISTINCT m.customer_id) custs
                    $baseJoin WHERE $mrWhereSql", $mrParams);
 
 /* Total billing without Hold amount */
