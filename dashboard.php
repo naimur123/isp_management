@@ -228,7 +228,7 @@ foreach ($bankWiseCollectionRecords as $row) {
 // /* End */
 
 /* Total Paid Collection */
-$paidWhereSql = $mrWhereSql. " AND  m.collection_status = 'Paid'";
+$paidWhereSql = $mrWhereSql. " AND  m.status != 'Hold' AND m.collection_status = 'Paid'";
 $sqlTotalPaid = "SELECT SUM(m.collection_amount) AS paid_amount
              $baseJoin
              Where $paidWhereSql";
