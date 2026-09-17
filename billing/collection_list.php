@@ -9,7 +9,7 @@ $month = get_param('month');
 $year = get_param('year');
 $status = get_param('status');
 
-$where = ['cr.status = "Active" AND cr.deleted_at IS NULL'];
+$where = ['cr.status != "Hold" AND cr.deleted_at IS NULL'];
 $params = [];
 
 if ($q !== '') {
@@ -37,12 +37,21 @@ if ($status !== '') {
 
 $whereSql = implode(' AND ', $where);
 
-$countStmt = db()->prepare("SELECT COUNT(*) c FROM monthly_records cr LEFT JOIN customers c ON c.id = cr.customer_id WHERE $whereSql");
-$countStmt->execute($params);
-$total = (int) $countStmt->fetch()['c'];
+// Calculate total count and grand total sum for amounts matching the active filters
+$summaryStmt = db()->prepare("SELECT COUNT(*) AS total_count, SUM(cr.billing_amount) AS total_billing, SUM(cr.collection_amount) AS total_collection FROM monthly_records cr LEFT JOIN customers c ON c.id = cr.customer_id WHERE $whereSql");
+$summaryStmt->execute($params);
+$summaryData = $summaryStmt->fetch();
+
+$total = (int) ($summaryData['total_count'] ?? 0);
+$grandTotalBilling = (float) ($summaryData['total_billing'] ?? 0);
+$grandTotalCollection = (float) ($summaryData['total_collection'] ?? 0);
+
+// Handle pagination limits (25, 50, 100, 250, 500, 1000)
+$perPageReq = (int) get_param('per_page');
+$allowedPerPage = [25, 50, 100, 250, 500, 1000];
+$perPage = in_array($perPageReq, $allowedPerPage, true) ? $perPageReq : 25;
 
 $page = current_page();
-$perPage = page_size();
 $offset = ($page - 1) * $perPage;
 
 $sql = "SELECT cr.*, c.customer_id AS cust_code, c.customer_name, co.company_name, u.full_name AS created_by_name
@@ -134,7 +143,7 @@ require_once __DIR__ . '/../includes/header.php';
       <tbody>
         <?php if (!$rows): ?>
           <tr>
-            <td colspan="13">
+            <td colspan="10">
               <div class="empty-state"><i class="fa-solid fa-receipt"></i>No monthly records found matching your filters.
               </div>
             </td>
@@ -208,12 +217,6 @@ require_once __DIR__ . '/../includes/header.php';
               <?php if (is_admin()): ?>
                 <a href="<?= e(base_url('billing/edit.php?id=' . $r['id'])) ?>" class="btn btn-sm btn-outline-primary"
                   title="Edit"><i class="fa-solid fa-pen"></i></a>
-                <!-- <form action="<?= e(base_url('billing/delete.php')) ?>" method="post" class="d-inline"
-                  data-confirm="Are you sure you want to delete this record?">
-                  <?= csrf_field() ?><input type="hidden" name="id" value="<?= (int) $r['id'] ?>">
-                  <button type="submit" class="btn btn-sm btn-outline-danger" title="Delete"><i
-                      class="fa-solid fa-trash"></i></button>
-                </form> -->
               <?php else: ?>
                 <a href="<?= e(base_url('customers/view.php?id=' . $r['customer_id'])) ?>"
                   class="btn btn-sm btn-outline-secondary" title="View"><i class="fa-solid fa-eye"></i></a>
@@ -222,6 +225,16 @@ require_once __DIR__ . '/../includes/header.php';
           </tr>
         <?php endforeach; ?>
       </tbody>
+      <?php if ($rows): ?>
+      <tfoot class="table-light fw-bold">
+        <tr>
+          <td colspan="5" class="text-end">Grand Total:</td>
+          <td><?= format_currency($grandTotalBilling) ?></td>
+          <td><?= format_currency($grandTotalCollection) ?></td>
+          <td colspan="3"></td>
+        </tr>
+      </tfoot>
+      <?php endif; ?>
     </table>
   </div>
   <div class="card-footer d-flex flex-wrap justify-content-between align-items-center gap-2 bg-white">
@@ -231,8 +244,9 @@ require_once __DIR__ . '/../includes/header.php';
       <?php endforeach; ?>
       <span class="text-muted">Rows:</span>
       <select name="per_page" class="form-select form-select-sm" style="width:auto;" onchange="this.form.submit()">
-        <?php foreach ([10, 25, 50, 100] as $ps): ?>
-          <option value="<?= $ps ?>" <?= $perPage === $ps ? 'selected' : '' ?>><?= $ps ?></option><?php endforeach; ?>
+        <?php foreach ([25, 50, 100, 250, 500, 1000] as $ps): ?>
+          <option value="<?= $ps ?>" <?= $perPage === $ps ? 'selected' : '' ?>><?= ($ps == 1000) ? 'All' : $ps ?></option>
+        <?php endforeach; ?>
       </select>
     </form>
     <?= render_pagination($total, $page, $perPage) ?>
@@ -240,9 +254,7 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 <script>
   function toggleInlineForm(element) {
-  // Finds the parent <td> container
   const td = element.closest('td');
-  // Locates the hidden inline form within that <td>
   const formContainer = td.querySelector('.inline-status-form');
   
   if (formContainer) {
