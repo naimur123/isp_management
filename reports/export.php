@@ -57,6 +57,25 @@ switch ($type) {
         break;
     }
 
+    case 'collection_list': {
+        $title = 'Collection List';
+        $where = ['cr.status != "Hold" AND cr.deleted_at IS NULL AND c.deleted_at IS NULL'];
+        $params = [];
+        $q = get_param('q'); $companyId = get_param('company'); $month = get_param('month'); $year = get_param('year'); $status = get_param('status');
+        if ($q !== '') { $where[] = '(c.customer_id LIKE ? OR c.customer_name LIKE ?)'; $params[] = "%$q%"; $params[] = "%$q%"; }
+        if ($companyId !== '') { $where[] = 'c.company_id = ?'; $params[] = $companyId; }
+        if ($month !== '') { $where[] = 'cr.billing_month = ?'; $params[] = $month . '-01'; }
+        if ($year !== '') { $where[] = 'YEAR(cr.billing_month) = ?'; $params[] = $year; }
+        if ($status !== '') { $where[] = 'cr.collection_status = ?'; $params[] = $status; }
+        $whereSql = implode(' AND ', $where);
+        $data = run_all("SELECT cr.billing_month, c.customer_id, c.customer_name, co.company_name, cr.billing_amount, cr.collection_amount, cr.collection_status, u.full_name created_by
+                          FROM monthly_records cr LEFT JOIN customers c ON c.id = cr.customer_id LEFT JOIN companies co ON co.id = c.company_id LEFT JOIN users u ON u.id = cr.created_by
+                          WHERE $whereSql ORDER BY cr.id DESC", $params);
+        $headers = ['Collection Month','Customer ID','Customer Name','Company','Monthly Billing (BDT)','Collection Paid (BDT)','Status','Created By'];
+        foreach ($data as $r) $rows[] = [format_month($r['billing_month']), $r['customer_id'], $r['customer_name'], $r['company_name'], (float)$r['billing_amount'], (float)$r['collection_amount'], $r['collection_status'], $r['created_by'] ?? ''];
+        break;
+    }
+
     case 'central': {
         $title = 'Central Report';
         $companyId = get_param('company'); $categoryId = get_param('category'); $zoneId = get_param('zone'); $status = get_param('status');
@@ -188,7 +207,63 @@ if ($format === 'csv') {
     exit;
 }
 
-$spreadsheet = new Spreadsheet();
+if ($format === 'pdf') {
+    $fileName = preg_replace('/[^A-Za-z0-9_-]+/', '_', $title) . '.pdf';
+    $html = '<!DOCTYPE html><html><head><meta charset="utf-8"><title>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</title>';
+    $html .= '<style>body{font-family:Arial,sans-serif;font-size:11px;color:#111;margin:20px;}h2{margin:0 0 12px 0;font-size:18px;}table{border-collapse:collapse;width:100%;margin-top:8px;}th,td{border:1px solid #d1d5db;padding:6px 8px;text-align:left;vertical-align:top;}th{background:#1D4ED8;color:#fff;font-weight:bold;}tr:nth-child(even){background:#f9fafb;}.subtitle{font-size:10px;color:#4b5563;margin-bottom:10px;}</style>';
+    $html .= '</head><body>';
+    $html .= '<h2>' . htmlspecialchars($title, ENT_QUOTES, 'UTF-8') . '</h2>';
+    $html .= '<div class="subtitle">Generated: ' . htmlspecialchars(format_date(date('Y-m-d')) . ' ' . format_time(date('Y-m-d H:i:s')), ENT_QUOTES, 'UTF-8') . '</div>';
+    $html .= '<table><thead><tr>';
+    foreach ($headers as $header) $html .= '<th>' . htmlspecialchars((string) $header, ENT_QUOTES, 'UTF-8') . '</th>';
+    $html .= '</tr></thead><tbody>';
+    foreach ($rows as $row) {
+        $html .= '<tr>';
+        foreach ($row as $value) {
+            $html .= '<td>' . htmlspecialchars((string) $value, ENT_QUOTES, 'UTF-8') . '</td>';
+        }
+        $html .= '</tr>';
+    }
+    $html .= '</tbody></table></body></html>';
+
+    if (class_exists('Mpdf\\Mpdf')) {
+        $pdf = new \Mpdf\Mpdf(['tempDir' => sys_get_temp_dir()]);
+        $pdf->WriteHTML($html);
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        echo $pdf->Output($fileName, 'D');
+        exit;
+    }
+
+    if (class_exists('TCPDF')) {
+        $pdf = new \TCPDF('P', 'mm', 'A4');
+        $pdf->SetCreator('ISP Management');
+        $pdf->SetAuthor(current_user()['full_name'] ?? 'System');
+        $pdf->SetTitle($title);
+        $pdf->setPrintHeader(false);
+        $pdf->setPrintFooter(false);
+        $pdf->AddPage();
+        $pdf->writeHTML($html, true, false, true, false, '');
+        header('Content-Type: application/pdf');
+        header('Content-Disposition: attachment; filename="' . $fileName . '"');
+        echo $pdf->Output($fileName, 'D');
+        exit;
+    }
+
+    header('Content-Type: text/html; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . $fileName . '"');
+    echo $html;
+    exit;
+}
+
+if (!class_exists('PhpOffice\\PhpSpreadsheet\\Spreadsheet')) {
+    header('Content-Type: text/plain; charset=utf-8');
+    header('Content-Disposition: attachment; filename="' . preg_replace('/[^A-Za-z0-9_-]+/', '_', $title) . '.txt"');
+    echo 'Excel export is unavailable because PhpSpreadsheet is not installed in this PHP runtime.';
+    exit;
+}
+
+$spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
 $sheet = $spreadsheet->getActiveSheet();
 $sheet->setTitle(substr($title, 0, 31));
 

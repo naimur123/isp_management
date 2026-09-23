@@ -80,7 +80,7 @@ require_once __DIR__ . '/../includes/header.php';
     <div class="section-title">Month to Month Collection List</div>
     <div class="section-sub"><?= number_format($total) ?> record(s) found</div>
   </div>
-  <div class="d-flex gap-2">
+  <div class="d-flex gap-2 flex-wrap align-items-center">
     <?php if (is_admin()): ?>
       <a href="<?= e(base_url('billing/collection_add.php')) ?>" class="btn btn-primary"><i class="fa-solid fa-plus me-1"></i>Add Collection Record</a>
     <?php endif; ?>
@@ -123,9 +123,32 @@ require_once __DIR__ . '/../includes/header.php';
   </div>
 </div>
 
+<div class="row mb-3 mr-2">
+   <div class="col-md-2">
+      <div class="btn-group position-relative">
+         <button type="button" class="btn btn-primary dropdown-toggle" data-bs-toggle="dropdown" aria-expanded="false">
+            <i class="fa-solid fa-download me-1"></i>Export
+         </button>
+         <!-- Removed dropdown-menu-end so it aligns to the left edge -->
+         <ul class="dropdown-menu shadow" style="z-index: 1050;">
+            <li>
+              <a class="dropdown-item" href="<?= e(base_url('reports/export.php?type=collection_list&format=xlsx&' . build_query())) ?>"><i class="fa-solid fa-file-excel me-2 text-success"></i>Excel
+              </a>
+            </li>
+            <li>
+              <a class="dropdown-item" href="<?= e(base_url('reports/export.php?type=collection_list&format=pdf&' . build_query())) ?>"><i class="fa-solid fa-file-pdf me-2 text-danger"></i>PDF
+              </a>
+            </li>
+             <!-- <li><hr class="dropdown-divider"></li>
+            <li><button type="button" class="dropdown-item" onclick="printCollectionTable();"><i class="fa-solid fa-print me-2"></i>Print</button></li> -->
+         </ul>
+      </div>
+   </div>
+</div>
+
 <div class="card">
   <div class="table-responsive">
-    <table class="table table-hover mb-0 align-middle">
+    <table id="collection-table" class="table table-hover mb-0 align-middle">
       <thead>
         <tr>
           <th>SL</th>
@@ -254,12 +277,72 @@ require_once __DIR__ . '/../includes/header.php';
 </div>
 <script>
   function toggleInlineForm(element) {
-  const td = element.closest('td');
-  const formContainer = td.querySelector('.inline-status-form');
-  
-  if (formContainer) {
-    formContainer.classList.toggle('d-none');
+    const td = element.closest('td');
+    const formContainer = td && td.querySelector('.inline-status-form');
+
+    if (formContainer) {
+      formContainer.classList.toggle('d-none');
+    }
   }
-}
+
+  function printCollectionTable() {
+    const table = document.getElementById('collection-table');
+    if (!table) return;
+
+    const clone = table.cloneNode(true);
+    const actionHeader = clone.querySelector('thead th:last-child');
+    const actionCells = clone.querySelectorAll('tbody td:last-child, tfoot td:last-child');
+    if (actionHeader) actionHeader.remove();
+    actionCells.forEach((cell) => cell.remove());
+
+    clone.querySelectorAll('.inline-status-form, .inline-status-form *').forEach((node) => node.remove());
+    clone.querySelectorAll('input[type="hidden"], form, button, a').forEach((node) => {
+      if (node.closest('.inline-status-form')) {
+        node.remove();
+      }
+    });
+
+    const printWindow = window.open('', '_blank', 'width=1200,height=800');
+    if (!printWindow) {
+      alert('Pop-up blocked. Please allow pop-ups to print the collection list.');
+      return;
+    }
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8">
+        <title>Collection List</title>
+        <style>
+          body { font-family: Arial, sans-serif; padding: 24px; color: #111; }
+          h2 { margin-bottom: 12px; }
+          table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+          th, td { border: 1px solid #d1d5db; padding: 8px; text-align: left; vertical-align: top; }
+          th { background: #f3f4f6; }
+          .section-sub { font-size: 12px; color: #4b5563; margin-bottom: 16px; }
+          @media print {
+            body { padding: 0; }
+            button, .no-print { display: none !important; }
+          }
+        </style>
+      </head>
+      <body>
+        <h2>Month to Month Collection List</h2>
+        <div class="section-sub">Generated on ${new Date().toLocaleString()}</div>
+        ${clone.outerHTML}
+      </body>
+      </html>
+    `;
+
+    printWindow.document.open();
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    setTimeout(() => {
+      printWindow.print();
+      setTimeout(() => printWindow.close(), 1000);
+    }, 500);
+  }
 </script>
 <?php require_once __DIR__ . '/../includes/footer.php'; ?>
